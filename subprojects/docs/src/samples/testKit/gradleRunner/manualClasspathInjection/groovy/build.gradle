@@ -23,6 +23,7 @@ task createClasspathManifest {
     inputs.files(sourceSets.main.runtimeClasspath)
         .withPropertyName("runtimeClasspath")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withNormalizer(ClasspathNormalizer)
     outputs.dir(outputDir)
         .withPropertyName("outputDir")
 
