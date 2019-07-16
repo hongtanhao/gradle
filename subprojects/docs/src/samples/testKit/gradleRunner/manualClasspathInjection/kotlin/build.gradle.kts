@@ -22,7 +22,6 @@ tasks.register("createClasspathManifest") {
 
     inputs.files(sourceSets.main.get().runtimeClasspath)
         .withPropertyName("runtimeClasspath")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
         .withNormalizer(ClasspathNormalizer::class)
     outputs.dir(outputDir)
         .withPropertyName("outputDir")
