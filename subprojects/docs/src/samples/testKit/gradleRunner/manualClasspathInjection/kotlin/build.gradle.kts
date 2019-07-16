@@ -21,7 +21,10 @@ tasks.register("createClasspathManifest") {
     val outputDir = file("$buildDir/$name")
 
     inputs.files(sourceSets.main.get().runtimeClasspath)
+        .withPropertyName("runtimeClasspath")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.dir(outputDir)
+        .withPropertyName("outputDir")
 
     doLast {
         outputDir.mkdirs()
