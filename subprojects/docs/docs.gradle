@@ -367,9 +367,15 @@ tasks.withType(CacheableAsciidoctorTask).configureEach {
     separateOutputDirs = false
     options doctype: 'book'
 
-    inputs.file("$srcDocsDir/css/manual.css").withPropertyName("manual").withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(file("src/main/resources")).withPropertyName("resources").withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(samplesSrcDir).withPropertyName("samples").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("$srcDocsDir/css/manual.css")
+        .withPropertyName("manual")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(file("src/main/resources"))
+        .withPropertyName("resources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(samplesSrcDir)
+        .withPropertyName("samples")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 
     attributes stylesdir    : '../css/',
         stylesheet          : 'manual.css',
