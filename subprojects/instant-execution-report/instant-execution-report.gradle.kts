@@ -14,14 +14,8 @@
  * limitations under the License.
  */
 
-import org.gradle.gradlebuild.unittestandcompile.ModuleType
-
 plugins {
-    id("kotlin2js")
-}
-
-gradlebuildJava {
-    moduleType = ModuleType.INTERNAL
+    kotlin("js")
 }
 
 dependencies {
@@ -30,7 +24,7 @@ dependencies {
 
 tasks {
 
-    compileKotlin2Js {
+    compileKotlinJs {
         kotlinOptions {
             outputFile = "$buildDir/js/instant-execution-report.js"
             metaInfo = false
@@ -58,7 +52,7 @@ tasks {
     }
 
     processResources {
-        from(compileKotlin2Js.map { it.outputFile })
+        from(compileKotlinJs.map { it.outputFile })
         from(unpackKotlinJsStdlib)
     }
 }
