@@ -25,7 +25,7 @@ import org.gradle.internal.work.ConditionalExecutionQueue
 import org.gradle.internal.work.WorkerLeaseRegistry
 import org.gradle.process.internal.worker.child.WorkerDirectoryProvider
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
-import org.gradle.testing.internal.util.Specification
+import spock.lang.Specification
 import org.gradle.util.RedirectStdOutAndErr
 import org.gradle.util.UsesNativeServices
 import org.gradle.workers.IsolationMode
@@ -53,12 +53,14 @@ class DefaultWorkerExecutorTest extends Specification {
     def executionQueue = Mock(ConditionalExecutionQueue)
     def classLoaderStructureProvider = Mock(ClassLoaderStructureProvider)
     def worker = Mock(BuildOperationAwareWorker)
+    def actionExecutionSpecFactory = Mock(ActionExecutionSpecFactory)
     ConditionalExecution task
     DefaultWorkerExecutor workerExecutor
 
     def setup() {
         _ * executionQueueFactory.create() >> executionQueue
-        workerExecutor = new DefaultWorkerExecutor(workerDaemonFactory, inProcessWorkerFactory, noIsolationWorkerFactory, forkOptionsFactory, buildOperationWorkerRegistry, buildOperationExecutor, asyncWorkTracker, workerDirectoryProvider, executionQueueFactory, classLoaderStructureProvider)
+        workerExecutor = new DefaultWorkerExecutor(workerDaemonFactory, inProcessWorkerFactory, noIsolationWorkerFactory, forkOptionsFactory, buildOperationWorkerRegistry, buildOperationExecutor, asyncWorkTracker, workerDirectoryProvider, executionQueueFactory, classLoaderStructureProvider, actionExecutionSpecFactory)
+        _ * actionExecutionSpecFactory.newIsolatedSpec(_, _, _, _) >> Mock(IsolatedParametersActionExecutionSpec)
     }
 
     def "worker configuration fork property defaults to AUTO"() {
@@ -128,7 +130,7 @@ class DefaultWorkerExecutorTest extends Specification {
         DaemonForkOptions daemonForkOptions = workerExecutor.getDaemonForkOptions(runnable.class, configuration)
 
         then:
-        1 * classLoaderStructureProvider.getInProcessClassLoaderStructure(_) >> { args -> new HierarchicalClassLoaderStructure(new VisitableURLClassLoader.Spec("test", args[0].collect { it.toURI().toURL() }))}
+        1 * classLoaderStructureProvider.getInProcessClassLoaderStructure(_, _) >> { args -> new HierarchicalClassLoaderStructure(new VisitableURLClassLoader.Spec("test", args[0].collect { it.toURI().toURL() }))}
 
         and:
         daemonForkOptions.classLoaderStructure.spec.classpath.contains(foo.toURI().toURL())

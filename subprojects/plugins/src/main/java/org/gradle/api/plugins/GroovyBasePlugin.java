@@ -40,6 +40,7 @@ import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.compile.CompileOptions;
 import org.gradle.api.tasks.compile.GroovyCompile;
 import org.gradle.api.tasks.javadoc.Groovydoc;
+import org.gradle.internal.component.external.model.TestFixturesSupport;
 
 import javax.inject.Inject;
 import java.io.File;
@@ -64,6 +65,7 @@ public class GroovyBasePlugin implements Plugin<Project> {
         this.moduleRegistry = moduleRegistry;
     }
 
+    @Override
     public void apply(Project project) {
         this.project = project;
         project.getPluginManager().apply(JavaBasePlugin.class);
@@ -81,8 +83,10 @@ public class GroovyBasePlugin implements Plugin<Project> {
 
     private void configureCompileDefaults() {
         project.getTasks().withType(GroovyCompile.class).configureEach(new Action<GroovyCompile>() {
+            @Override
             public void execute(final GroovyCompile compile) {
                 compile.getConventionMapping().map("groovyClasspath", new Callable<Object>() {
+                    @Override
                     public Object call() {
                         return groovyRuntime.inferGroovyClasspath(compile.getClasspath());
                     }
@@ -93,12 +97,14 @@ public class GroovyBasePlugin implements Plugin<Project> {
 
     private void configureSourceSetDefaults() {
         project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets().all(new Action<SourceSet>() {
+            @Override
             public void execute(final SourceSet sourceSet) {
                 final DefaultGroovySourceSet groovySourceSet = new DefaultGroovySourceSet("groovy", ((DefaultSourceSet) sourceSet).getDisplayName(), objectFactory);
                 new DslObject(sourceSet).getConvention().getPlugins().put("groovy", groovySourceSet);
 
                 groovySourceSet.getGroovy().srcDir("src/" + sourceSet.getName() + "/groovy");
                 sourceSet.getResources().getFilter().exclude(new Spec<FileTreeElement>() {
+                    @Override
                     public boolean isSatisfiedBy(FileTreeElement element) {
                         return groovySourceSet.getGroovy().contains(element.getFile());
                     }
@@ -122,7 +128,7 @@ public class GroovyBasePlugin implements Plugin<Project> {
                     }
                 }));
 
-                if (SourceSet.MAIN_SOURCE_SET_NAME.equals(sourceSet.getName())) {
+                if (SourceSet.MAIN_SOURCE_SET_NAME.equals(sourceSet.getName()) || TestFixturesSupport.TEST_FIXTURE_SOURCESET_NAME.equals(sourceSet.getName())) {
                     // The user has chosen to use the java-library plugin;
                     // add a classes variant for groovy's main sourceSet compilation,
                     // so default-configuration project dependencies will see groovy's output.
@@ -149,8 +155,10 @@ public class GroovyBasePlugin implements Plugin<Project> {
 
     private void configureGroovydoc() {
         project.getTasks().withType(Groovydoc.class).configureEach(new Action<Groovydoc>() {
+            @Override
             public void execute(final Groovydoc groovydoc) {
                 groovydoc.getConventionMapping().map("groovyClasspath", new Callable<Object>() {
+                    @Override
                     public Object call() throws Exception {
                         FileCollection groovyClasspath = groovyRuntime.inferGroovyClasspath(groovydoc.getClasspath());
                         // Jansi is required to log errors when generating Groovydoc
@@ -159,16 +167,19 @@ public class GroovyBasePlugin implements Plugin<Project> {
                     }
                 });
                 groovydoc.getConventionMapping().map("destinationDir", new Callable<Object>() {
+                    @Override
                     public Object call() throws Exception {
                         return new File(java(project.getConvention()).getDocsDir(), "groovydoc");
                     }
                 });
                 groovydoc.getConventionMapping().map("docTitle", new Callable<Object>() {
+                    @Override
                     public Object call() throws Exception {
                         return project.getExtensions().getByType(ReportingExtension.class).getApiDocTitle();
                     }
                 });
                 groovydoc.getConventionMapping().map("windowTitle", new Callable<Object>() {
+                    @Override
                     public Object call() throws Exception {
                         return project.getExtensions().getByType(ReportingExtension.class).getApiDocTitle();
                     }

@@ -15,15 +15,20 @@
  */
 package org.gradle.api.plugins.internal;
 
+import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.ConfigurationPublications;
 import org.gradle.api.artifacts.ConfigurationVariant;
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition;
+import org.gradle.api.attributes.LibraryElements;
 import org.gradle.api.attributes.Usage;
 import org.gradle.api.internal.artifacts.publish.AbstractPublishArtifact;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.Provider;
+import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.compile.AbstractCompile;
+import org.gradle.api.tasks.compile.JavaCompile;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -38,13 +43,34 @@ public class JavaPluginsHelper {
         // Define a classes variant to use for compilation
         ConfigurationPublications publications = configuration.getOutgoing();
         ConfigurationVariant variant = publications.getVariants().maybeCreate("classes");
-        variant.getAttributes().attribute(Usage.USAGE_ATTRIBUTE, objectFactory.named(Usage.class, Usage.JAVA_API_CLASSES));
+        variant.getAttributes().attribute(Usage.USAGE_ATTRIBUTE, objectFactory.named(Usage.class, Usage.JAVA_API));
+        variant.getAttributes().attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objectFactory.named(LibraryElements.class, LibraryElements.CLASSES));
         variant.artifact(new IntermediateJavaArtifact(ArtifactTypeDefinition.JVM_CLASS_DIRECTORY, compileTask) {
             @Override
             public File getFile() {
                 return compileTask.get().getDestinationDir();
             }
         });
+    }
+
+    public static void addApiToSourceSet(Project project, SourceSet sourceSet, ConfigurationContainer configurations) {
+        Configuration apiConfiguration = configurations.maybeCreate(sourceSet.getApiConfigurationName());
+        apiConfiguration.setVisible(false);
+        apiConfiguration.setDescription("API dependencies for " + sourceSet + ".");
+        apiConfiguration.setCanBeResolved(false);
+        apiConfiguration.setCanBeConsumed(false);
+
+        Configuration apiElementsConfiguration = configurations.getByName(sourceSet.getApiElementsConfigurationName());
+        apiElementsConfiguration.extendsFrom(apiConfiguration);
+
+        final Provider<JavaCompile> javaCompile = project.getTasks().named(sourceSet.getCompileJavaTaskName(), JavaCompile.class);
+        registerClassesDirVariant(javaCompile, project.getObjects(), apiElementsConfiguration);
+
+        Configuration implementationConfiguration = configurations.getByName(sourceSet.getImplementationConfigurationName());
+        implementationConfiguration.extendsFrom(apiConfiguration);
+
+        Configuration compileConfiguration = configurations.getByName(sourceSet.getCompileConfigurationName());
+        apiConfiguration.extendsFrom(compileConfiguration);
     }
 
     /**

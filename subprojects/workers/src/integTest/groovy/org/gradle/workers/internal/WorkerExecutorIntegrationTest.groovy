@@ -19,7 +19,10 @@ package org.gradle.workers.internal
 import org.gradle.integtests.fixtures.BuildOperationsFixture
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.test.fixtures.server.http.BlockingHttpServer
+import org.gradle.workers.IsolationMode
 import org.junit.Rule
+import spock.lang.Ignore
+import spock.lang.Issue
 import spock.lang.Unroll
 
 import static org.gradle.workers.fixtures.WorkerExecutorFixture.ISOLATION_MODES
@@ -48,6 +51,20 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         then:
         assertRunnableExecuted("runInWorker")
 
+        when:
+        buildFile << """
+            class AnotherFoo extends org.gradle.other.Foo {
+            }
+            
+            runInWorker {
+                foo = new AnotherFoo()
+            }
+        """
+        succeeds("runInWorker")
+
+        then:
+        assertRunnableExecuted("runInWorker")
+
         where:
         isolationMode << ISOLATION_MODES
     }
@@ -62,6 +79,20 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         """
 
         when:
+        succeeds("runInWorker")
+
+        then:
+        assertRunnableExecuted("runInWorker")
+
+        when:
+        buildFile << """
+            class AnotherFoo extends org.gradle.other.Foo {
+            }
+            
+            runInWorker {
+                foo = new AnotherFoo()
+            }
+        """
         succeeds("runInWorker")
 
         then:
@@ -88,6 +119,20 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         """
 
         when:
+        succeeds("runInWorker")
+
+        then:
+        assertRunnableExecuted("runInWorker")
+
+        when:
+        buildFile << """
+            class AnotherFoo extends org.gradle.other.Foo {
+            }
+            
+            runInWorker {
+                foo = new AnotherFoo()
+            }
+        """
         succeeds("runInWorker")
 
         then:
@@ -416,7 +461,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         succeeds "verifyIsolated"
     }
 
-    def "user classpath is isolated when using IsolationMode.CLASSLOADER"() {
+    def "user classpath is isolated when using #isolationMode"() {
         fixture.withRunnableClassInBuildScript()
 
         buildFile << """
@@ -461,7 +506,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             }
             
             task checkGuavaVersion(type: WorkerTask) {
-                isolationMode = IsolationMode.CLASSLOADER
+                isolationMode = IsolationMode.${isolationMode}
                 runnableClass = GuavaVersionRunnable.class
                 additionalClasspath = configurations.customGuava
             } 
@@ -472,6 +517,123 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
         and:
         outputContains("Guava version: 23.1.0.jre")
+
+        where:
+        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+    }
+
+    def "classloader is minimal when using #isolationMode"() {
+        fixture.withRunnableClassInBuildSrc()
+
+        buildFile << """         
+            class SneakyRunnable extends TestRunnable {            
+                @Inject
+                public SneakyRunnable(List<String> files, File outputDir, Foo foo) {
+                    super(files, outputDir, foo);
+                }
+                
+                public void run() {
+                    super.run()
+                    // These classes were chosen to be relatively stable and would be unusual to see in a worker. 
+                    def gradleApiClasses = [
+                        "${com.google.common.collect.Lists.canonicalName}",
+                    ]
+                    def reachableClasses = gradleApiClasses.findAll { reachable(it) }
+                    if (!reachableClasses.empty) {
+                        throw new IllegalArgumentException("These classes should not be visible to the worker action: " + reachableClasses)
+                    }
+                }
+                
+                private boolean reachable(String classname) {
+                    try {
+                        Class.forName(classname)
+                        // bad! the class was leaked into the worker classpath
+                        return true
+                    } catch (Exception e) {
+                        // The class was not found in the classpath
+                        return false
+                    }
+                }
+            }
+            
+            task runInWorker(type: WorkerTask) {
+                isolationMode = IsolationMode.$isolationMode
+                runnableClass = SneakyRunnable
+            } 
+        """
+
+        when:
+        succeeds("runInWorker", "-i")
+        then:
+        assertRunnableExecuted("runInWorker")
+
+        where:
+        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+    }
+
+    @Ignore
+    def "null parameters can be provided"() {
+        fixture.withRunnableClassInBuildScript()
+
+        buildFile << """
+            task runInWorkerWithNullParameter(type: WorkerTask) {
+                foo = null
+                isolationMode = IsolationMode.NONE
+            } 
+        """
+
+        when:
+        succeeds "runInWorkerWithNullParameter"
+
+        then:
+        assertRunnableExecuted("runInWorkerWithNullParameter")
+    }
+
+    @Ignore
+    @Issue("https://github.com/gradle/gradle/issues/8628")
+    def "can find resources in the classpath via the context classloader using #isolationMode"() {
+        fixture.withRunnableClassInBuildSrc()
+
+        file('foo.txt').text = "foo!"
+        buildFile << """
+            apply plugin: "base"
+
+            class ResourceRunnable extends TestRunnable {
+                @Inject
+                public ResourceRunnable(List<String> files, File outputDir, Foo foo) {
+                    super(files, outputDir, foo);
+                }
+
+                public void run() {
+                    super.run()
+                    def resource = Thread.currentThread().getContextClassLoader().getResource("foo.txt")
+                    assert resource != null && resource.getPath().endsWith('build/libs/foo.jar!/foo.txt')
+                    println resource
+                }
+            }
+
+            task jarFoo(type: Jar) {
+                archiveBaseName = 'foo'
+                from 'foo.txt'
+            }
+
+            task runInWorker(type: WorkerTask) {
+                isolationMode = IsolationMode.${isolationMode}
+                runnableClass = ResourceRunnable
+                additionalClasspath = tasks.jarFoo.outputs.files
+                dependsOn jarFoo
+            } 
+        """
+
+        when:
+        succeeds("runInWorker")
+
+        then:
+        assertRunnableExecuted("runInWorker")
+
+        where:
+        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+
     }
 
     void withParameterClassReferencingClassInAnotherPackage() {
